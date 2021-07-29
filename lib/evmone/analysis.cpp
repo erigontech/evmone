@@ -178,8 +178,8 @@ AdvancedCodeAnalysis analyze(evmc_revision rev, const uint8_t* code, size_t code
     assert(analysis.push_values.size() <= max_args_storage_size);
 
     // pad jumpdest_offsets to make it suitable for hybrid_search
-    const size_t padded_size = (analysis.jumpdest_offsets.size() + 7) / 8;
-    analysis.jumpdest_offsets.resize(static_cast<size_t>(padded_size), INT32_MAX);
+    const size_t padded_size = ((analysis.jumpdest_offsets.size() + 7) / 8) * 8;
+    analysis.jumpdest_offsets.resize(padded_size, INT32_MAX);
 
     return analysis;
 }

@@ -43,8 +43,8 @@ static const int32_t* hybrid_search_generic(const int32_t* vec, size_t n, int32_
 
 hybrid_search_func hybrid_search = hybrid_search_generic;
 
-
 #if defined(__x86_64__) && __has_attribute(target)
+
 __attribute__((target("avx2"))) static const int32_t* hybrid_search_avx2(
     const int32_t* vec, size_t n, int32_t key)
 {
