@@ -17,6 +17,7 @@ add_library(evmone
     baseline_instruction_table.hpp
     execution.cpp
     execution.hpp
+    hybrid_search.cpp
     hybrid_search.hpp
     instruction_traits.hpp
     instructions.cpp
