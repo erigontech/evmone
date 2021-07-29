@@ -133,12 +133,31 @@ struct AdvancedCodeAnalysis
     std::vector<int32_t> jumpdest_targets;
 };
 
+inline const int* branchless_binary_search(const int* arr, uint64_t n, int key)
+{
+    if (n == 0)
+        return arr;
+
+    int pos = -1;
+    const unsigned logstep = 63 - intx::clz(n);
+    int step = 1 << logstep;
+    const int step1 = static_cast<int>(n + 1) - step;
+    pos = (arr[pos + step1] < key ? pos + step1 : pos);
+    step >>= 1;
+    while (step > 0)
+    {
+        pos = (arr[pos + step] < key ? pos + step : pos);
+        step >>= 1;
+    }
+    return arr + pos + 1;
+}
+
 inline int find_jumpdest(const AdvancedCodeAnalysis& analysis, int offset) noexcept
 {
-    const auto begin = std::begin(analysis.jumpdest_offsets);
-    const auto end = std::end(analysis.jumpdest_offsets);
-    const auto it = std::lower_bound(begin, end, offset);
-    return (it != end && *it == offset) ?
+    const auto begin = analysis.jumpdest_offsets.data();
+    const auto n = analysis.jumpdest_offsets.size();
+    const auto it = branchless_binary_search(begin, n, offset);
+    return (it != begin + n && *it == offset) ?
                analysis.jumpdest_targets[static_cast<size_t>(it - begin)] :
                -1;
 }
