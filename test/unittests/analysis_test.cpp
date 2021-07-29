@@ -87,9 +87,17 @@ TEST(analysis, jump1)
     const auto code = jump(add(4, 2)) + OP_JUMPDEST + mstore(0, 3) + ret(0, 0x20) + jump(6);
     const auto analysis = analyze(rev, &code[0], code.size());
 
-    ASSERT_EQ(analysis.jumpdest_offsets.size(), 1);
+    // jumpdest_offsets is padded
+    ASSERT_EQ(analysis.jumpdest_offsets.size(), 8);
     ASSERT_EQ(analysis.jumpdest_targets.size(), 1);
     EXPECT_EQ(analysis.jumpdest_offsets[0], 6);
+    EXPECT_EQ(analysis.jumpdest_offsets[1], INT32_MAX);
+    EXPECT_EQ(analysis.jumpdest_offsets[2], INT32_MAX);
+    EXPECT_EQ(analysis.jumpdest_offsets[3], INT32_MAX);
+    EXPECT_EQ(analysis.jumpdest_offsets[4], INT32_MAX);
+    EXPECT_EQ(analysis.jumpdest_offsets[5], INT32_MAX);
+    EXPECT_EQ(analysis.jumpdest_offsets[6], INT32_MAX);
+    EXPECT_EQ(analysis.jumpdest_offsets[7], INT32_MAX);
     EXPECT_EQ(analysis.jumpdest_targets[0], 5);
     EXPECT_EQ(find_jumpdest(analysis, 6), 5);
     EXPECT_EQ(find_jumpdest(analysis, 0), -1);
@@ -111,9 +119,17 @@ TEST(analysis, only_jumpdest)
     const auto code = bytecode{OP_JUMPDEST};
     auto analysis = evmone::analyze(rev, &code[0], code.size());
 
-    ASSERT_EQ(analysis.jumpdest_offsets.size(), 1);
+    // jumpdest_offsets is padded
+    ASSERT_EQ(analysis.jumpdest_offsets.size(), 8);
     ASSERT_EQ(analysis.jumpdest_targets.size(), 1);
     EXPECT_EQ(analysis.jumpdest_offsets[0], 0);
+    EXPECT_EQ(analysis.jumpdest_offsets[1], INT32_MAX);
+    EXPECT_EQ(analysis.jumpdest_offsets[2], INT32_MAX);
+    EXPECT_EQ(analysis.jumpdest_offsets[3], INT32_MAX);
+    EXPECT_EQ(analysis.jumpdest_offsets[4], INT32_MAX);
+    EXPECT_EQ(analysis.jumpdest_offsets[5], INT32_MAX);
+    EXPECT_EQ(analysis.jumpdest_offsets[6], INT32_MAX);
+    EXPECT_EQ(analysis.jumpdest_offsets[7], INT32_MAX);
     EXPECT_EQ(analysis.jumpdest_targets[0], 0);
 }
 
@@ -161,8 +177,8 @@ TEST(analysis, jumpdests_groups)
     EXPECT_EQ(analysis.instrs[9].fn, op_tbl[OPX_BEGINBLOCK].fn);
     EXPECT_EQ(analysis.instrs[10].fn, op_tbl[OP_STOP].fn);
 
-    // jumpdest_offsets is padded to 2^k-1 for unrolled_binary_search
-    ASSERT_EQ(analysis.jumpdest_offsets.size(), 7);
+    // jumpdest_offsets is padded
+    ASSERT_EQ(analysis.jumpdest_offsets.size(), 8);
     ASSERT_EQ(analysis.jumpdest_targets.size(), 6);
     EXPECT_EQ(analysis.jumpdest_offsets[0], 0);
     EXPECT_EQ(analysis.jumpdest_targets[0], 0);
@@ -177,4 +193,5 @@ TEST(analysis, jumpdests_groups)
     EXPECT_EQ(analysis.jumpdest_offsets[5], 7);
     EXPECT_EQ(analysis.jumpdest_targets[5], 6);
     EXPECT_EQ(analysis.jumpdest_offsets[6], INT32_MAX);
+    EXPECT_EQ(analysis.jumpdest_offsets[7], INT32_MAX);
 }

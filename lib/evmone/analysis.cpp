@@ -39,17 +39,6 @@ struct block_analysis
     }
 };
 
-// Backported C++20 std::bit_ceil.
-// Calculates the smallest integral power of two that is not smaller than x.
-static inline constexpr uint64_t bit_ceil(uint64_t x) noexcept
-{
-    if (x <= 1)
-        return 1;
-
-    const unsigned bit_width = 64 - intx::clz(x - 1);
-    return uint64_t{1} << bit_width;
-}
-
 AdvancedCodeAnalysis analyze(evmc_revision rev, const uint8_t* code, size_t code_size) noexcept
 {
     const auto& op_tbl = get_op_table(rev);
@@ -188,9 +177,8 @@ AdvancedCodeAnalysis analyze(evmc_revision rev, const uint8_t* code, size_t code
     // Make sure the push_values has not been reallocated. Otherwise iterators are invalid.
     assert(analysis.push_values.size() <= max_args_storage_size);
 
-    // pad jumpdest_offsets to make it suitable for unrolled_binary_search
-    const uint64_t padded_size =
-        bit_ceil(static_cast<uint64_t>(analysis.jumpdest_offsets.size()) + 1) - 1;
+    // pad jumpdest_offsets to make it suitable for hybrid_search
+    const size_t padded_size = (analysis.jumpdest_offsets.size() + 7) / 8;
     analysis.jumpdest_offsets.resize(static_cast<size_t>(padded_size), INT32_MAX);
 
     return analysis;

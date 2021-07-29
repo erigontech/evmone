@@ -17,6 +17,7 @@ add_library(evmone
     baseline_instruction_table.hpp
     execution.cpp
     execution.hpp
+    hybrid_search.hpp
     instruction_traits.hpp
     instructions.cpp
     instructions.hpp
@@ -25,7 +26,6 @@ add_library(evmone
     opcodes_helpers.h
     tracing.cpp
     tracing.hpp
-    unrolled_binary_search.hpp
     vm.cpp
     vm.hpp
 )

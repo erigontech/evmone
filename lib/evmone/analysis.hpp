@@ -4,8 +4,8 @@
 #pragma once
 
 #include "execution_state.hpp"
+#include "hybrid_search.hpp"
 #include "limits.hpp"
-#include "unrolled_binary_search.hpp"
 #include <evmc/evmc.hpp>
 #include <evmc/instructions.h>
 #include <evmc/utils.h>
@@ -139,7 +139,7 @@ inline int32_t find_jumpdest(const AdvancedCodeAnalysis& analysis, int32_t offse
 {
     const auto begin = analysis.jumpdest_offsets.data();
     const auto n = analysis.jumpdest_offsets.size();
-    const auto it = unrolled_binary_search(begin, n, offset);
+    const auto it = hybrid_search(begin, n, offset);
     return (it != begin + n && *it == offset) ?
                analysis.jumpdest_targets[static_cast<size_t>(it - begin)] :
                -1;
