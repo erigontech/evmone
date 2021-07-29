@@ -39,7 +39,8 @@ const instruction* op_sstore(const instruction* instr, AdvancedExecutionState& s
     return ++instr;
 }
 
-const instruction* op_jump(const instruction*, AdvancedExecutionState& state) noexcept
+__attribute__((target("avx2"))) const instruction* op_jump(
+    const instruction*, AdvancedExecutionState& state) noexcept
 {
     const auto dst = state.stack.pop();
     auto pc = -1;
