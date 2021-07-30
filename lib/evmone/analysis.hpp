@@ -135,14 +135,15 @@ struct AdvancedCodeAnalysis
 
 inline const int* branchless_binary_search(const int* arr, uint64_t n, int key)
 {
-    if (n == 0)
+    if (INTX_UNLIKELY(n == 0))
         return arr;
 
     int pos = -1;
     const unsigned logstep = 63 - intx::clz(n);
     int step = 1 << logstep;
-    const int step1 = static_cast<int>(n + 1) - step;
-    pos = (arr[pos + step1] < key ? pos + step1 : pos);
+    const int range1 = static_cast<int>(n + 1) - step;
+    pos += (arr[pos + range1] < key) * range1;
+    // later on range is the same as step
     step >>= 1;
     while (step > 0)
     {
