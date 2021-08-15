@@ -36,7 +36,7 @@ void dump(const evmone::AdvancedCodeAnalysis& analysis)
                     if (static_cast<size_t>(analysis.jumpdest_targets[t]) == index)
                         return analysis.jumpdest_offsets[t];
                 }
-                return int32_t{-1};
+                return std::numeric_limits<uint16_t>::max();
             };
 
             std::cout << "┌ ";

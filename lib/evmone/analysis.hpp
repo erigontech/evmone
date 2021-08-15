@@ -125,22 +125,22 @@ struct AdvancedCodeAnalysis
     /// The offsets of JUMPDESTs in the original code.
     /// These are values that JUMP/JUMPI receives as an argument.
     /// The elements are sorted.
-    std::vector<int32_t> jumpdest_offsets;
+    std::vector<uint16_t> jumpdest_offsets;
 
     /// The indexes of the instructions in the generated instruction table
     /// matching the elements from jumdest_offsets.
     /// This is value to which the next instruction pointer must be set in JUMP/JUMPI.
-    std::vector<int32_t> jumpdest_targets;
+    std::vector<uint16_t> jumpdest_targets;
 };
 
-inline int find_jumpdest(const AdvancedCodeAnalysis& analysis, int offset) noexcept
+inline uint16_t find_jumpdest(const AdvancedCodeAnalysis& analysis, uint16_t offset) noexcept
 {
     const auto begin = std::begin(analysis.jumpdest_offsets);
     const auto end = std::end(analysis.jumpdest_offsets);
     const auto it = std::lower_bound(begin, end, offset);
     return (it != end && *it == offset) ?
                analysis.jumpdest_targets[static_cast<size_t>(it - begin)] :
-               -1;
+               UINT16_MAX;
 }
 
 EVMC_EXPORT AdvancedCodeAnalysis analyze(

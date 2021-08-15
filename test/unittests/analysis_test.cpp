@@ -92,8 +92,8 @@ TEST(analysis, jump1)
     EXPECT_EQ(analysis.jumpdest_offsets[0], 6);
     EXPECT_EQ(analysis.jumpdest_targets[0], 5);
     EXPECT_EQ(find_jumpdest(analysis, 6), 5);
-    EXPECT_EQ(find_jumpdest(analysis, 0), -1);
-    EXPECT_EQ(find_jumpdest(analysis, 7), -1);
+    EXPECT_EQ(find_jumpdest(analysis, 0), UINT16_MAX);
+    EXPECT_EQ(find_jumpdest(analysis, 7), UINT16_MAX);
 }
 
 TEST(analysis, empty)
