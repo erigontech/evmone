@@ -18,6 +18,8 @@
 #include <cassert>
 #include <limits>
 
+#include <silkworm/core/execution/precompile.hpp>
+
 #ifdef EVMONE_PRECOMPILES_SILKPRE
 #include "precompiles_silkpre.hpp"
 #endif
@@ -532,6 +534,28 @@ ExecutionResult bls12_map_fp2_to_g2_execute(const uint8_t* input, size_t input_s
     return {EVMC_SUCCESS, 256};
 }
 
+namespace {
+ExecutionResult silkworm_expmod_execute(const uint8_t* input, size_t input_size, uint8_t* output,
+    [[maybe_unused]] size_t output_size) noexcept
+{
+    auto res = silkworm::precompile::expmod_run({input, input_size});
+    if (!res)
+        return {EVMC_PRECOMPILE_FAILURE, 0};
+    std::memcpy(output, res->data(), res->size());
+    return {EVMC_SUCCESS, res->size()};
+}
+
+ExecutionResult silkworm_ecpairing_execute(const uint8_t* input, size_t input_size, uint8_t* output,
+    [[maybe_unused]] size_t output_size) noexcept
+{
+    auto res = silkworm::precompile::snarkv_run({input, input_size});
+    if (!res)
+        return {EVMC_PRECOMPILE_FAILURE, 0};
+    std::memcpy(output, res->data(), res->size());
+    return {EVMC_SUCCESS, res->size()};
+}
+}
+
 namespace
 {
 struct PrecompileTraits
@@ -547,10 +571,10 @@ inline constexpr auto traits = []() noexcept {
         {sha256_analyze, sha256_execute},
         {ripemd160_analyze, ripemd160_execute},
         {identity_analyze, identity_execute},
-        {expmod_analyze, expmod_stub},
+        {expmod_analyze, silkworm_expmod_execute},
         {ecadd_analyze, ecadd_execute},
         {ecmul_analyze, ecmul_execute},
-        {ecpairing_analyze, ecpairing_stub},
+        {ecpairing_analyze, silkworm_ecpairing_execute},
         {blake2bf_analyze, blake2bf_execute},
         {point_evaluation_analyze, point_evaluation_execute},
         {bls12_g1add_analyze, bls12_g1add_execute},
