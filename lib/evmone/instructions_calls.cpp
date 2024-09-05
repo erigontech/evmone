@@ -90,8 +90,10 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
     stack.push(0);  // Assume failure.
     state.return_data.clear();
 
+    auto& gas_cost = state.last_opcode_gas_cost;
     if (state.rev >= EVMC_BERLIN && state.host.access_account(dst) == EVMC_ACCESS_COLD)
     {
+        gas_cost += instr::additional_cold_account_access_cost;
         if ((gas_left -= instr::additional_cold_account_access_cost) < 0)
             return {EVMC_OUT_OF_GAS, gas_left};
     }
@@ -102,10 +104,10 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
 
     const auto& code_addr = std::get<evmc::address>(target_addr_or_result);
 
-    if (!check_memory(gas_left, state.memory, input_offset_u256, input_size_u256))
+    if (!check_memory(gas_left, gas_cost, state.memory, input_offset_u256, input_size_u256))
         return {EVMC_OUT_OF_GAS, gas_left};
 
-    if (!check_memory(gas_left, state.memory, output_offset_u256, output_size_u256))
+    if (!check_memory(gas_left, gas_cost, state.memory, output_offset_u256, output_size_u256))
         return {EVMC_OUT_OF_GAS, gas_left};
 
     const auto input_offset = static_cast<size_t>(input_offset_u256);
@@ -143,7 +145,7 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
         if ((has_value || state.rev < EVMC_SPURIOUS_DRAGON) && !state.host.account_exists(dst))
             cost += ACCOUNT_CREATION_COST;
     }
-
+    gas_cost += cost;
     if ((gas_left -= cost) < 0)
         return {EVMC_OUT_OF_GAS, gas_left};
 
@@ -155,6 +157,8 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
         msg.gas = std::min(msg.gas, gas_left - gas_left / 64);
     else if (msg.gas > gas_left)
         return {EVMC_OUT_OF_GAS, gas_left};
+
+    gas_cost += msg.gas;
 
     if (has_value)
     {
@@ -168,6 +172,7 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
     if (has_value && intx::be::load<uint256>(state.host.get_balance(state.msg->recipient)) < value)
         return {EVMC_SUCCESS, gas_left};  // "Light" failure.
 
+    msg.gas_cost = gas_cost;
     const auto result = state.host.call(msg);
     state.return_data.assign(result.output_data, result.output_size);
     stack.top() = result.status_code == EVMC_SUCCESS;
@@ -178,6 +183,7 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
     const auto gas_used = msg.gas - result.gas_left;
     gas_left -= gas_used;
     state.gas_refund += result.gas_refund;
+
     return {EVMC_SUCCESS, gas_left};
 }
 
@@ -223,7 +229,7 @@ Result extcall_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noe
 
     const auto& code_addr = std::get<evmc::address>(target_addr_or_result);
 
-    if (!check_memory(gas_left, state.memory, input_offset_u256, input_size_u256))
+    if (!check_memory(gas_left, state.last_opcode_gas_cost, state.memory, input_offset_u256, input_size_u256))
         return {EVMC_OUT_OF_GAS, gas_left};
 
     const auto input_offset = static_cast<size_t>(input_offset_u256);
@@ -326,7 +332,7 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     stack.push(0);  // Assume failure.
     state.return_data.clear();
 
-    if (!check_memory(gas_left, state.memory, init_code_offset_u256, init_code_size_u256))
+    if (!check_memory(gas_left, state.last_opcode_gas_cost, state.memory, init_code_offset_u256, init_code_size_u256))
         return {EVMC_OUT_OF_GAS, gas_left};
 
     const auto init_code_offset = static_cast<size_t>(init_code_offset_u256);
@@ -337,6 +343,8 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
 
     const auto init_code_word_cost = 6 * (Op == OP_CREATE2) + 2 * (state.rev >= EVMC_SHANGHAI);
     const auto init_code_cost = num_words(init_code_size) * init_code_word_cost;
+    state.last_opcode_gas_cost += init_code_cost;
+
     if ((gas_left -= init_code_cost) < 0)
         return {EVMC_OUT_OF_GAS, gas_left};
 
@@ -369,6 +377,7 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     msg.depth = state.msg->depth + 1;
     msg.create2_salt = intx::be::store<evmc::bytes32>(salt);
     msg.value = intx::be::store<evmc::uint256be>(endowment);
+    msg.gas_cost = state.last_opcode_gas_cost;
 
     const auto result = state.host.call(msg);
     gas_left -= msg.gas - result.gas_left;
@@ -377,6 +386,8 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     state.return_data.assign(result.output_data, result.output_size);
     if (result.status_code == EVMC_SUCCESS)
         stack.top() = intx::be::load<uint256>(result.create_address);
+
+    state.last_opcode_gas_cost = 0;
 
     return {EVMC_SUCCESS, gas_left};
 }
@@ -395,7 +406,7 @@ Result eofcreate(
     stack.push(0);  // Assume failure.
     state.return_data.clear();
 
-    if (!check_memory(gas_left, state.memory, input_offset_u256, input_size_u256))
+    if (!check_memory(gas_left, state.last_opcode_gas_cost, state.memory, input_offset_u256, input_size_u256))
         return {EVMC_OUT_OF_GAS, gas_left};
 
     const auto initcontainer_index = pos[1];
