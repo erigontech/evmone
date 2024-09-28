@@ -71,6 +71,8 @@ evmc_set_option_result set_option(evmc_vm* c_vm, char const* c_name, char const*
 
 }  // namespace
 
+thread_local
+    std::vector<ExecutionState> m_execution_states;
 
 VM::VM() noexcept
   : evmc_vm{

@@ -24,7 +24,6 @@ public:
     bool validate_eof = false;
 
 private:
-    std::vector<ExecutionState> m_execution_states;
     std::unique_ptr<Tracer> m_first_tracer;
 
 public:
