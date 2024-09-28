@@ -172,14 +172,17 @@ struct Position
 /// A helper to invoke the instruction implementation of the given opcode Op.
 template <Opcode Op>
 [[release_inline]] inline Position invoke(const CostTable& cost_table, const uint256* stack_bottom,
-    Position pos, int64_t& gas, ExecutionState& state) noexcept
+    Position pos, int64_t& gas, ExecutionState& state, bool tracing_enabled) noexcept
 {
-    if (const auto status = check_requirements<Op>(cost_table, gas, state.last_opcode_gas_cost, pos.stack_top, stack_bottom);
-        status != EVMC_SUCCESS)
-    {
+    auto starting_gas = gas;
+    const auto status = check_requirements<Op>(cost_table, gas, state.last_opcode_gas_cost, pos.stack_top, stack_bottom);
+    if (status != EVMC_SUCCESS) {
+        if (tracing_enabled)
+            invoke(instr::core::impl<Op>, pos, starting_gas, state);
         state.status = status;
         return {nullptr, pos.stack_top};
     }
+
     const auto new_pos = invoke(instr::core::impl<Op>, pos, gas, state);
     const auto new_stack_top = pos.stack_top + instr::traits[Op].stack_height_change;
     return {new_pos, new_stack_top};
@@ -214,7 +217,7 @@ int64_t dispatch(const CostTable& cost_table, ExecutionState& state, int64_t gas
 #define ON_OPCODE(OPCODE)                                                                     \
     case OPCODE:                                                                              \
         ASM_COMMENT(OPCODE);                                                                  \
-        if (const auto next = invoke<OPCODE>(cost_table, stack_bottom, position, gas, state); \
+        if (const auto next = invoke<OPCODE>(cost_table, stack_bottom, position, gas, state, TracingEnabled); \
             next.code_it == nullptr)                                                          \
         {                                                                                     \
             return gas;                                                                       \
@@ -264,7 +267,7 @@ int64_t dispatch_cgoto(
 
 #define ON_OPCODE(OPCODE)                                                                 \
     TARGET_##OPCODE : ASM_COMMENT(OPCODE);                                                \
-    if (const auto next = invoke<OPCODE>(cost_table, stack_bottom, position, gas, state); \
+    if (const auto next = invoke<OPCODE>(cost_table, stack_bottom, position, gas, state, false); \
         next.code_it == nullptr)                                                          \
     {                                                                                     \
         return gas;                                                                       \
