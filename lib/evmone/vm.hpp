@@ -36,6 +36,11 @@ public:
         *end = std::move(tracer);
     }
 
+    void remove_tracers() noexcept
+    {
+        m_first_tracer.reset();
+    }
+
     [[nodiscard]] Tracer* get_tracer() const noexcept { return m_first_tracer.get(); }
 };
 }  // namespace evmone
