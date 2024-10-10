@@ -13,7 +13,7 @@ namespace
 /// Information about a registered system contract.
 struct SystemContract
 {
-    using GetInputFn = bytes32(const BlockInfo&) noexcept;
+    using GetInputFn = bytes32(const BlockInfo&, const BlockHashProvider& bhp) noexcept;
 
     evmc_revision since = EVMC_MAX_REVISION;  ///< EVM revision in which added.
     address addr;                             ///< Address of the system contract.
@@ -23,10 +23,12 @@ struct SystemContract
 /// Registered system contracts.
 constexpr std::array SYSTEM_CONTRACTS{
     SystemContract{EVMC_CANCUN, BEACON_ROOTS_ADDRESS,
-        [](const BlockInfo& block) noexcept { return block.parent_beacon_block_root; }},
+        [](const BlockInfo& block, const BlockHashProvider&) noexcept {
+            return block.parent_beacon_block_root;
+        }},
     SystemContract{EVMC_PRAGUE, HISTORY_STORAGE_ADDRESS,
-        [](const BlockInfo& block) noexcept {
-            return block.known_block_hashes.at(block.number - 1);
+        [](const BlockInfo& block, const BlockHashProvider& bhp) noexcept {
+            return bhp.get_block_hash(block.number - 1);
         }},
 };
 
@@ -51,7 +53,7 @@ StateDiff system_call(const StateView& state_view, const BlockInfo& block,
         if (code.empty())
             continue;
 
-        const auto input = get_input(block);
+        const auto input = get_input(block, bhp);
 
         const evmc_message msg{
             .kind = EVMC_CALL,
