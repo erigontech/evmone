@@ -30,4 +30,11 @@ public:
     virtual bytes get_account_code(const address& addr) const noexcept = 0;
     virtual bytes32 get_storage(const address& addr, const bytes32& key) const noexcept = 0;
 };
+
+class BlockHashProvider
+{
+public:
+    virtual ~BlockHashProvider() = default;
+    virtual bytes32 get_block_hash(int64_t block_number) const noexcept = 0;
+};
 }  // namespace evmone::state
