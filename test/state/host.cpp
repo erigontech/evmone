@@ -475,10 +475,7 @@ evmc_tx_context Host::get_tx_context() const noexcept
 
 bytes32 Host::get_block_hash(int64_t block_number) const noexcept
 {
-    if (const auto& it = m_block.known_block_hashes.find(block_number);
-        it != m_block.known_block_hashes.end())
-        return it->second;
-    return {};
+    return m_bhp.get_block_hash(block_number);
 }
 
 void Host::emit_log(const address& addr, const uint8_t* data, size_t data_size,

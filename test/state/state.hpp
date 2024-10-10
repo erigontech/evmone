@@ -10,6 +10,7 @@
 #include "errors.hpp"
 #include "hash_utils.hpp"
 #include "state_diff.hpp"
+#include "state_view.hpp"
 #include "transaction.hpp"
 #include <variant>
 
@@ -139,8 +140,8 @@ public:
     std::span<const Withdrawal> withdrawals);
 
 [[nodiscard]] std::variant<TransactionReceipt, std::error_code> transition(const StateView& state,
-    const BlockInfo& block, const Transaction& tx, evmc_revision rev, evmc::VM& vm,
-    int64_t block_gas_left, int64_t blob_gas_left);
+    const BlockInfo& block, const BlockHashProvider& bhp, const Transaction& tx, evmc_revision rev,
+    evmc::VM& vm, int64_t block_gas_left, int64_t blob_gas_left);
 
 std::variant<int64_t, std::error_code> validate_transaction(const Account& sender_acc,
     const BlockInfo& block, const Transaction& tx, evmc_revision rev, int64_t block_gas_left,

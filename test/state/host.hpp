@@ -5,6 +5,7 @@
 #pragma once
 
 #include "state.hpp"
+#include "state_view.hpp"
 #include <optional>
 
 namespace evmone::state
@@ -39,13 +40,14 @@ class Host : public evmc::Host
     evmc::VM& m_vm;
     State& m_state;
     const BlockInfo& m_block;
+    const BlockHashProvider& m_bhp;
     const Transaction& m_tx;
     std::vector<Log> m_logs;
 
 public:
     Host(evmc_revision rev, evmc::VM& vm, State& state, const BlockInfo& block,
-        const Transaction& tx) noexcept
-      : m_rev{rev}, m_vm{vm}, m_state{state}, m_block{block}, m_tx{tx}
+        const BlockHashProvider& bhp, const Transaction& tx) noexcept
+      : m_rev{rev}, m_vm{vm}, m_state{state}, m_block{block}, m_bhp{bhp}, m_tx{tx}
     {}
 
     [[nodiscard]] std::vector<Log>&& take_logs() noexcept { return std::move(m_logs); }

@@ -36,8 +36,8 @@ static_assert(std::ranges::is_sorted(SYSTEM_CONTRACTS,
 
 }  // namespace
 
-StateDiff system_call(
-    const StateView& state_view, const BlockInfo& block, evmc_revision rev, evmc::VM& vm)
+StateDiff system_call(const StateView& state_view, const BlockInfo& block,
+    const BlockHashProvider& bhp, evmc_revision rev, evmc::VM& vm)
 {
     State state{state_view};
     for (const auto& [since, addr, get_input] : SYSTEM_CONTRACTS)
@@ -63,7 +63,7 @@ StateDiff system_call(
         };
 
         const Transaction empty_tx{};
-        Host host{rev, vm, state, block, empty_tx};
+        Host host{rev, vm, state, block, bhp, empty_tx};
         [[maybe_unused]] const auto res = vm.execute(host, rev, msg, code.data(), code.size());
         assert(res.status_code == EVMC_SUCCESS);
     }
