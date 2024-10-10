@@ -59,6 +59,13 @@ bytes32 TestState::get_storage(const address& addr, const bytes32& key) const no
     return (it != storage.end()) ? it->second : bytes32{};
 }
 
+bytes32 TestBlockHashes::get_block_hash(int64_t block_number) const noexcept
+{
+    if (const auto& it = known_block_hashes_.find(block_number); it != known_block_hashes_.end())
+        return it->second;
+    return {};
+}
+
 [[nodiscard]] std::variant<state::TransactionReceipt, std::error_code> transition(TestState& state,
     const state::BlockInfo& block, const state::Transaction& tx, evmc_revision rev, evmc::VM& vm,
     int64_t block_gas_left, int64_t blob_gas_left)
