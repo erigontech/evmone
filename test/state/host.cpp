@@ -350,7 +350,7 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     if (gas_left < 0)
     {
         return (m_rev == EVMC_FRONTIER) ?
-                   evmc::Result{EVMC_SUCCESS, result.gas_left, result.gas_refund, msg.recipient} :
+                   evmc::Result{EVMC_SUCCESS, result.gas_left, result.gas_refund, 0, msg.recipient} :
                    evmc::Result{EVMC_FAILURE};
     }
 
@@ -375,7 +375,7 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     new_acc->code_hash = keccak256(code);
     new_acc->code = code;
 
-    return evmc::Result{result.status_code, gas_left, result.gas_refund, msg.recipient};
+    return evmc::Result{result.status_code, gas_left, result.gas_refund, 0, msg.recipient};
 }
 
 evmc::Result Host::execute_message(const evmc_message& msg) noexcept
