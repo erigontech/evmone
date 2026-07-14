@@ -431,10 +431,15 @@ inline Result balance(StackTop stack, int64_t gas_left, ExecutionState& state) n
     auto& x = stack.top();
     const auto addr = intx::be::trunc<evmc::address>(x);
 
-    if (state.rev >= EVMC_BERLIN && state.host.access_account(addr) == EVMC_ACCESS_COLD)
+    if (state.rev >= EVMC_BERLIN)
     {
-        if ((gas_left -= instr::additional_cold_account_access_cost) < 0)
+        g_suppress_bal_observer = true;
+        const auto acc_status = state.host.access_account(addr);
+        g_suppress_bal_observer = false;
+        if (acc_status == EVMC_ACCESS_COLD &&
+            (gas_left -= instr::additional_cold_account_access_cost_for(state.rev)) < 0)
             return {EVMC_OUT_OF_GAS, gas_left};
+        state.host.access_account(addr);
     }
 
     x = intx::be::load<uint256>(state.host.get_balance(addr));
@@ -578,10 +583,15 @@ inline Result extcodesize(StackTop stack, int64_t gas_left, ExecutionState& stat
     auto& x = stack.top();
     const auto addr = intx::be::trunc<evmc::address>(x);
 
-    if (state.rev >= EVMC_BERLIN && state.host.access_account(addr) == EVMC_ACCESS_COLD)
+    if (state.rev >= EVMC_BERLIN)
     {
-        if ((gas_left -= instr::additional_cold_account_access_cost) < 0)
+        g_suppress_bal_observer = true;
+        const auto acc_status = state.host.access_account(addr);
+        g_suppress_bal_observer = false;
+        if (acc_status == EVMC_ACCESS_COLD &&
+            (gas_left -= instr::additional_cold_account_access_cost_for(state.rev)) < 0)
             return {EVMC_OUT_OF_GAS, gas_left};
+        state.host.access_account(addr);
     }
 
     x = state.host.get_code_size(addr);
@@ -602,10 +612,15 @@ inline Result extcodecopy(StackTop stack, int64_t gas_left, ExecutionState& stat
     if (const auto cost = copy_cost(s); (gas_left -= cost) < 0)
         return {EVMC_OUT_OF_GAS, gas_left};
 
-    if (state.rev >= EVMC_BERLIN && state.host.access_account(addr) == EVMC_ACCESS_COLD)
+    if (state.rev >= EVMC_BERLIN)
     {
-        if ((gas_left -= instr::additional_cold_account_access_cost) < 0)
+        g_suppress_bal_observer = true;
+        const auto acc_status = state.host.access_account(addr);
+        g_suppress_bal_observer = false;
+        if (acc_status == EVMC_ACCESS_COLD &&
+            (gas_left -= instr::additional_cold_account_access_cost_for(state.rev)) < 0)
             return {EVMC_OUT_OF_GAS, gas_left};
+        state.host.access_account(addr);
     }
 
     if (s > 0)
@@ -659,10 +674,15 @@ inline Result extcodehash(StackTop stack, int64_t gas_left, ExecutionState& stat
     auto& x = stack.top();
     const auto addr = intx::be::trunc<evmc::address>(x);
 
-    if (state.rev >= EVMC_BERLIN && state.host.access_account(addr) == EVMC_ACCESS_COLD)
+    if (state.rev >= EVMC_BERLIN)
     {
-        if ((gas_left -= instr::additional_cold_account_access_cost) < 0)
+        g_suppress_bal_observer = true;
+        const auto acc_status = state.host.access_account(addr);
+        g_suppress_bal_observer = false;
+        if (acc_status == EVMC_ACCESS_COLD &&
+            (gas_left -= instr::additional_cold_account_access_cost_for(state.rev)) < 0)
             return {EVMC_OUT_OF_GAS, gas_left};
+        state.host.access_account(addr);
     }
 
     x = intx::be::load<uint256>(state.host.get_code_hash(addr));
@@ -1067,10 +1087,15 @@ inline TermResult selfdestruct(StackTop stack, int64_t gas_left, ExecutionState&
 
     const auto beneficiary = intx::be::trunc<evmc::address>(stack[0]);
 
-    if (state.rev >= EVMC_BERLIN && state.host.access_account(beneficiary) == EVMC_ACCESS_COLD)
+    if (state.rev >= EVMC_BERLIN)
     {
-        if ((gas_left -= instr::cold_account_access_cost) < 0)
+        g_suppress_bal_observer = true;
+        const auto ben_status = state.host.access_account(beneficiary);
+        g_suppress_bal_observer = false;
+        if (ben_status == EVMC_ACCESS_COLD &&
+            (gas_left -= instr::cold_account_access_cost_for(state.rev)) < 0)
             return {EVMC_OUT_OF_GAS, gas_left};
+        state.host.access_account(beneficiary);
     }
 
     if (state.rev >= EVMC_TANGERINE_WHISTLE)
@@ -1079,9 +1104,33 @@ inline TermResult selfdestruct(StackTop stack, int64_t gas_left, ExecutionState&
         {
             // After TANGERINE_WHISTLE apply additional cost of
             // sending value to a non-existing account.
+            // EIP-8037 + EIP-8038 (Amsterdam, per EELS selfdestruct): positive
+            // balance to a non-alive beneficiary charges ACCOUNT_WRITE (8,000
+            // regular, before state) + NEW_ACCOUNT (183,600 state, reservoir
+            // first). No charge at all for alive beneficiaries.
             if (!state.host.account_exists(beneficiary))
             {
-                if ((gas_left -= 25000) < 0)
+                if (state.rev >= EVMC_AMSTERDAM)
+                {
+                    if ((gas_left -= 8000) < 0)
+                        return {EVMC_OUT_OF_GAS, gas_left};
+                    constexpr int64_t new_account_state_cost = 183600;
+                    const int64_t from_reservoir =
+                        state.state_gas_reservoir != nullptr
+                            ? std::min(new_account_state_cost, *state.state_gas_reservoir)
+                            : 0;
+                    const int64_t remaining = new_account_state_cost - from_reservoir;
+                    if (gas_left < remaining)
+                        return {EVMC_OUT_OF_GAS, gas_left - remaining};
+                    gas_left -= remaining;
+                    if (state.state_gas_reservoir != nullptr)
+                        *state.state_gas_reservoir -= from_reservoir;
+                    g_tx_state_gas_charged += new_account_state_cost;
+                    state.state_gas_from_reservoir += from_reservoir;
+                    state.state_gas_from_gas_left += remaining;
+                    state.state_gas_used_net += new_account_state_cost;
+                }
+                else if ((gas_left -= 25000) < 0)
                     return {EVMC_OUT_OF_GAS, gas_left};
             }
         }

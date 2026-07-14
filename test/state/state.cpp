@@ -230,6 +230,22 @@ StateDiff State::build_diff(evmc_revision rev) const
     {
         if (m.destructed)
         {
+            // EIP-8246 (Amsterdam): destructed accounts are cleared in place
+            // (nonce=0, code empty, storage empty) with the balance preserved.
+            // Zero-balance results are EIP-161-empty and still deleted.
+            if (rev >= EVMC_AMSTERDAM && m.balance != 0)
+            {
+                // NOLINTNEXTLINE(modernize-use-emplace)
+                auto& a = diff.modified_accounts.emplace_back(
+                    StateDiff::Entry{addr, 0 /*nonce*/, m.balance});
+                a.code = bytes{};
+                for (const auto& [k, v] : m.storage)
+                {
+                    if (!is_zero(v.original))
+                        a.modified_storage.emplace_back(k, bytes32{});
+                }
+                continue;
+            }
             // TODO: This must be done even for just_created
             //   because destructed may pre-date just_created. Add test to evmone (EEST has it).
             diff.deleted_accounts.emplace_back(addr);

@@ -27,6 +27,29 @@ inline constexpr auto additional_cold_account_access_cost =
     cold_account_access_cost - warm_storage_read_cost;
 /// @}
 
+/// EIP-8038 (Amsterdam) state-access gas cost update.
+/// @{
+inline constexpr auto cold_account_access_cost_amsterdam = 3000;
+inline constexpr auto additional_cold_account_access_cost_amsterdam =
+    cold_account_access_cost_amsterdam - warm_storage_read_cost;
+/// @}
+
+/// Returns the additional cold-account-access surcharge (over warm) for a given revision.
+inline constexpr int64_t additional_cold_account_access_cost_for(evmc_revision rev) noexcept
+{
+    return rev >= EVMC_AMSTERDAM
+               ? int64_t{additional_cold_account_access_cost_amsterdam}
+               : int64_t{additional_cold_account_access_cost};
+}
+
+/// Returns the total cold-account-access cost (used where the warm cost is not preapplied).
+inline constexpr int64_t cold_account_access_cost_for(evmc_revision rev) noexcept
+{
+    return rev >= EVMC_AMSTERDAM
+               ? int64_t{cold_account_access_cost_amsterdam}
+               : int64_t{cold_account_access_cost};
+}
+
 
 /// The table of instruction gas costs per EVM revision.
 using GasCostTable = std::array<std::array<int16_t, 256>, EVMC_MAX_REVISION + 1>;
@@ -181,6 +204,15 @@ constexpr inline GasCostTable gas_costs = []() noexcept {
     table[EVMC_AMSTERDAM][OP_DUPN] = 3;
     table[EVMC_AMSTERDAM][OP_SWAPN] = 3;
     table[EVMC_AMSTERDAM][OP_EXCHANGE] = 3;
+    // EIP-8037 + EIP-8038: GAS_CREATE regular part drops from 32,000 to
+    // CREATE_ACCESS (11,000); the account-creation cost moves to the state
+    // dimension (120 × 1530), charged at the call boundary.
+    table[EVMC_AMSTERDAM][OP_CREATE] = 11000;
+    table[EVMC_AMSTERDAM][OP_CREATE2] = 11000;
+    // EIP-8038: EXTCODESIZE/EXTCODECOPY do two DB reads — the second is
+    // priced as an additional WARM_ACCESS (warm total 200, cold 3,100).
+    table[EVMC_AMSTERDAM][OP_EXTCODESIZE] = 2 * warm_storage_read_cost;
+    table[EVMC_AMSTERDAM][OP_EXTCODECOPY] = 2 * warm_storage_read_cost;
 
     table[EVMC_EXPERIMENTAL] = table[EVMC_AMSTERDAM];
 

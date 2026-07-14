@@ -292,8 +292,48 @@ evmc_result execute(VM& vm, const evmc_host_interface& host, evmc_host_context* 
             gas = dispatch<false>(cost_table, state, gas, code_begin);
     }
 
-    const auto gas_left = (state.status == EVMC_SUCCESS || state.status == EVMC_REVERT) ? gas : 0;
+    auto gas_left = (state.status == EVMC_SUCCESS || state.status == EVMC_REVERT) ? gas : 0;
     const auto gas_refund = (state.status == EVMC_SUCCESS) ? state.gas_refund : 0;
+
+    // EIP-8037 (Amsterdam): on non-success frame exit, all state-creating work
+    // done inside this frame is undone. Refill the `state_gas_from_gas_left`
+    // portion LIFO: credit gas_left first (up to the counter), remainder to
+    // the tx-wide reservoir. On exceptional halt, gas_left is discarded, so
+    // the refill that would have gone to gas_left is lost — only the reservoir
+    // portion survives (which for an already-exhausted reservoir is zero).
+    //
+    // On SUCCESS, the counter is published for the parent to fold into its
+    // own — the state charges persist and are now backed by the parent's
+    // merged gas_left after the child returns.
+    if (state.status != EVMC_SUCCESS)
+    {
+        // Frame failed — roll back its state gas (EELS refill_frame_state_gas):
+        // the gas_left-spilled portion is credited back on REVERT (lost on
+        // exceptional halt where gas_left is consumed anyway); the reservoir
+        // receives `used - spilled`, which is SIGNED — a frame that received
+        // more refund credits than it charged claws the excess back.
+        if (state.state_gas_from_gas_left > 0 && state.status == EVMC_REVERT)
+        {
+            const int64_t to_gas_left =
+                std::min(state.state_gas_from_gas_left, INT64_MAX - gas_left);
+            gas_left += to_gas_left;
+        }
+        if (state.state_gas_reservoir != nullptr)
+        {
+            *state.state_gas_reservoir +=
+                state.state_gas_used_net - state.state_gas_from_gas_left;
+        }
+        state.state_gas_from_gas_left = 0;
+        state.state_gas_from_reservoir = 0;
+        state.state_gas_used_net = 0;
+    }
+
+    g_last_frame_state_gas_from_gas_left =
+        (state.status == EVMC_SUCCESS) ? state.state_gas_from_gas_left : int64_t{0};
+    g_last_frame_state_gas_from_reservoir =
+        (state.status == EVMC_SUCCESS) ? state.state_gas_from_reservoir : int64_t{0};
+    g_last_frame_state_gas_used_net =
+        (state.status == EVMC_SUCCESS) ? state.state_gas_used_net : int64_t{0};
 
     assert(state.output_size != 0 || state.output_offset == 0);
     const auto result = evmc::make_result(state.status, gas_left, gas_refund,
