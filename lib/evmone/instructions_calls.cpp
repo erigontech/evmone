@@ -30,12 +30,10 @@ inline std::variant<evmc::address, Result> get_target_address(
     if (!delegate_addr)
         return addr;
 
-    const auto delegate_account_access_cost =
-        (state.host.access_account(*delegate_addr) == EVMC_ACCESS_COLD ?
-                cold_account_access(state.rev) :
-                WARM_ACCESS);
-
-    if ((gas_left -= delegate_account_access_cost) < 0)
+    // The warm access cost is charged unconditionally; a cold delegate adds the difference.
+    if ((gas_left -= WARM_ACCESS) < 0 ||
+        !charge_account_access(
+            state, *delegate_addr, gas_left, cold_account_access(state.rev) - WARM_ACCESS))
         return Result{EVMC_OUT_OF_GAS, gas_left};
 
     return *delegate_addr;
@@ -134,11 +132,9 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 
-    if (state.rev >= EVMC_BERLIN && state.host.access_account(dst) == EVMC_ACCESS_COLD)
-    {
-        if ((gas_left -= additional_cold_account_access(state.rev)) < 0)
-            return {EVMC_OUT_OF_GAS, gas_left};
-    }
+    if (state.rev >= EVMC_BERLIN &&
+        !charge_account_access(state, dst, gas_left, additional_cold_account_access(state.rev)))
+        return {EVMC_OUT_OF_GAS, gas_left};
 
     const auto target_addr_or_result = get_target_address(dst, gas_left, state);
     if (const auto* result = std::get_if<Result>(&target_addr_or_result))

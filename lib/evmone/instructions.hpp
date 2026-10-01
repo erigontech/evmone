@@ -179,6 +179,41 @@ inline bool check_memory(
 
 namespace instr::core
 {
+/// Accesses the account and charges `cold_cost` if cold. From Amsterdam the access is repeated
+/// after the charge, so an out-of-gas leaves no state read in the block access list (EIP-7928).
+[[nodiscard]] inline bool charge_account_access(
+    ExecutionState& state, const evmc::address& addr, int64_t& gas_left, int64_t cold_cost) noexcept
+{
+    if (state.rev < EVMC_AMSTERDAM)
+        return state.host.access_account(addr) == EVMC_ACCESS_WARM || (gas_left -= cold_cost) >= 0;
+
+    g_access_peek = true;
+    const auto status = state.host.access_account(addr);
+    g_access_peek = false;
+    if (status == EVMC_ACCESS_COLD && (gas_left -= cold_cost) < 0)
+        return false;
+    state.host.access_account(addr);
+    return true;
+}
+
+/// Storage counterpart of charge_account_access().
+[[nodiscard]] inline bool charge_storage_access(
+    ExecutionState& state, const evmc::bytes32& key, int64_t& gas_left, int64_t cold_cost) noexcept
+{
+    if (state.rev < EVMC_AMSTERDAM)
+    {
+        return state.host.access_storage(state.msg->recipient, key) == EVMC_ACCESS_WARM ||
+               (gas_left -= cold_cost) >= 0;
+    }
+
+    g_access_peek = true;
+    const auto status = state.host.access_storage(state.msg->recipient, key);
+    g_access_peek = false;
+    if (status == EVMC_ACCESS_COLD && (gas_left -= cold_cost) < 0)
+        return false;
+    state.host.access_storage(state.msg->recipient, key);
+    return true;
+}
 
 /// The "core" instruction implementations.
 ///
@@ -432,11 +467,9 @@ inline Result balance(StackTop stack, int64_t gas_left, ExecutionState& state) n
     auto& x = stack.top();
     const auto addr = intx::be::trunc<evmc::address>(x);
 
-    if (state.rev >= EVMC_BERLIN && state.host.access_account(addr) == EVMC_ACCESS_COLD)
-    {
-        if ((gas_left -= additional_cold_account_access(state.rev)) < 0)
-            return {EVMC_OUT_OF_GAS, gas_left};
-    }
+    if (state.rev >= EVMC_BERLIN &&
+        !charge_account_access(state, addr, gas_left, additional_cold_account_access(state.rev)))
+        return {EVMC_OUT_OF_GAS, gas_left};
 
     x = intx::be::load<uint256>(state.host.get_balance(addr));
     return {EVMC_SUCCESS, gas_left};
@@ -579,11 +612,9 @@ inline Result extcodesize(StackTop stack, int64_t gas_left, ExecutionState& stat
     auto& x = stack.top();
     const auto addr = intx::be::trunc<evmc::address>(x);
 
-    if (state.rev >= EVMC_BERLIN && state.host.access_account(addr) == EVMC_ACCESS_COLD)
-    {
-        if ((gas_left -= additional_cold_account_access(state.rev)) < 0)
-            return {EVMC_OUT_OF_GAS, gas_left};
-    }
+    if (state.rev >= EVMC_BERLIN &&
+        !charge_account_access(state, addr, gas_left, additional_cold_account_access(state.rev)))
+        return {EVMC_OUT_OF_GAS, gas_left};
 
     x = state.host.get_code_size(addr);
     return {EVMC_SUCCESS, gas_left};
@@ -603,11 +634,9 @@ inline Result extcodecopy(StackTop stack, int64_t gas_left, ExecutionState& stat
     if (const auto cost = copy_cost(s); (gas_left -= cost) < 0)
         return {EVMC_OUT_OF_GAS, gas_left};
 
-    if (state.rev >= EVMC_BERLIN && state.host.access_account(addr) == EVMC_ACCESS_COLD)
-    {
-        if ((gas_left -= additional_cold_account_access(state.rev)) < 0)
-            return {EVMC_OUT_OF_GAS, gas_left};
-    }
+    if (state.rev >= EVMC_BERLIN &&
+        !charge_account_access(state, addr, gas_left, additional_cold_account_access(state.rev)))
+        return {EVMC_OUT_OF_GAS, gas_left};
 
     if (s > 0)
     {
@@ -660,11 +689,9 @@ inline Result extcodehash(StackTop stack, int64_t gas_left, ExecutionState& stat
     auto& x = stack.top();
     const auto addr = intx::be::trunc<evmc::address>(x);
 
-    if (state.rev >= EVMC_BERLIN && state.host.access_account(addr) == EVMC_ACCESS_COLD)
-    {
-        if ((gas_left -= additional_cold_account_access(state.rev)) < 0)
-            return {EVMC_OUT_OF_GAS, gas_left};
-    }
+    if (state.rev >= EVMC_BERLIN &&
+        !charge_account_access(state, addr, gas_left, additional_cold_account_access(state.rev)))
+        return {EVMC_OUT_OF_GAS, gas_left};
 
     x = intx::be::load<uint256>(state.host.get_code_hash(addr));
     return {EVMC_SUCCESS, gas_left};
@@ -1068,11 +1095,9 @@ inline TermResult selfdestruct(StackTop stack, int64_t gas_left, ExecutionState&
 
     const auto beneficiary = intx::be::trunc<evmc::address>(stack[0]);
 
-    if (state.rev >= EVMC_BERLIN && state.host.access_account(beneficiary) == EVMC_ACCESS_COLD)
-    {
-        if ((gas_left -= cold_account_access(state.rev)) < 0)
-            return {EVMC_OUT_OF_GAS, gas_left};
-    }
+    if (state.rev >= EVMC_BERLIN &&
+        !charge_account_access(state, beneficiary, gas_left, cold_account_access(state.rev)))
+        return {EVMC_OUT_OF_GAS, gas_left};
 
     if (state.rev >= EVMC_TANGERINE_WHISTLE)
     {

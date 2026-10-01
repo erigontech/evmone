@@ -107,14 +107,11 @@ Result sload(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
     auto& x = stack.top();
     const auto key = intx::be::store<evmc::bytes32>(x);
 
+    // The warm storage access cost is already applied (from the cost table).
+    // Here we need to apply additional cold storage access cost.
     if (state.rev >= EVMC_BERLIN &&
-        state.host.access_storage(state.msg->recipient, key) == EVMC_ACCESS_COLD)
-    {
-        // The warm storage access cost is already applied (from the cost table).
-        // Here we need to apply additional cold storage access cost.
-        if ((gas_left -= ADDITIONAL_COLD_STORAGE_ACCESS) < 0)
-            return {EVMC_OUT_OF_GAS, gas_left};
-    }
+        !charge_storage_access(state, key, gas_left, ADDITIONAL_COLD_STORAGE_ACCESS))
+        return {EVMC_OUT_OF_GAS, gas_left};
 
     x = intx::be::load<uint256>(state.host.get_storage(state.msg->recipient, key));
 

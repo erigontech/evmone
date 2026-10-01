@@ -124,6 +124,11 @@ public:
     void clear() noexcept { m_size = 0; }
 };
 
+/// Set while an account or storage slot is accessed before its cold access is charged
+/// (EIP-7928): a host recording state reads skips such accesses. Once the charge succeeds,
+/// the VM repeats the access with this flag clear.
+inline thread_local bool g_access_peek = false;
+
 /// Generic execution state for generic instructions implementations.
 // NOLINTNEXTLINE(clang-analyzer-optin.performance.Padding)
 class ExecutionState
